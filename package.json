@@ -1,0 +1,8 @@
+{
+  "name": "ayu-quiz-answers",
+  "version": "1.0.0",
+  "description": "АЮ READY КВИЗ — ответы на туры и список команд",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
