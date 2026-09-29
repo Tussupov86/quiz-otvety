@@ -48,9 +48,15 @@ h2{font-family:var(--display);font-weight:600;font-size:18px;margin:16px 0 10px}
 .row{display:grid;grid-template-columns:44px 1fr;align-items:center;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
 .num{font-family:var(--display);font-weight:600;color:var(--muted);text-align:center;font-size:14px}
-.row input{width:100%;min-width:0;border:0;background:transparent;color:var(--ink);font:500 17px var(--body);padding:14px 12px 14px 0}
-.row input::placeholder{color:var(--muted);opacity:.6}
+.row .ans{width:100%;min-width:0;border:0;background:transparent;color:var(--ink);font:500 17px var(--body);line-height:1.35;padding:12px 12px 12px 0;min-height:calc(1.35em + 24px);resize:none;overflow:hidden;display:block;overflow-wrap:anywhere}
+.row .num{align-self:start;padding-top:14px}
+.row .ans::placeholder{color:var(--muted);opacity:.6}
 .all{margin-top:28px}
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.hint{font-size:13px;color:var(--muted);flex:1 1 220px}
+.danger-btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--danger);font:600 14px var(--body);cursor:pointer}
+.danger-btn.armed{background:var(--danger);border-color:var(--danger);color:#fff}
+.flash{font-size:13px;color:var(--ok)}
 .all table{width:100%;border-collapse:collapse;font-size:14px}
 .all th{font:600 12px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:8px}
 .all td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}
@@ -99,6 +105,11 @@ h2{font-family:var(--display);font-weight:600;font-size:18px;margin:16px 0 10px}
     <div class="rounds" id="rounds"></div>
     <h2 id="roundTitle">Тур 1</h2>
     <div class="sheet" id="sheet"></div>
+    <div class="tools">
+      <span class="hint" id="pasteHint">Можно вставить сразу весь столбец ответов: встаньте в нужный вопрос и нажмите Ctrl+V.</span>
+      <button type="button" class="danger-btn" id="clearAll">Очистить все ответы</button>
+      <button type="button" class="ghost" id="clearCancel" hidden>Отмена</button>
+    </div>
     <div class="all">
       <h2>Все ответы</h2>
       <div class="scroll"><table id="allTable"></table></div>
@@ -204,12 +215,35 @@ function renderSheet(){
   for(let i=0;i<Q;i++){
     const row=document.createElement("label");row.className="row";
     row.innerHTML=`<span class="num">${i+1}</span>`;
-    const inp=document.createElement("input");inp.id=`a-${round}-${i}`;inp.placeholder="Ответ на вопрос "+(i+1);
-    inp.value=answers[round][i];inp.autocomplete="off";
-    inp.oninput=()=>{answers[round][i]=inp.value;renderRounds();renderAll();schedule("answers")};
+    const inp=document.createElement("textarea");inp.className="ans";inp.rows=1;inp.id=`a-${round}-${i}`;inp.placeholder="Ответ на вопрос "+(i+1);
+    inp.value=answers[round][i];inp.autocomplete="off";requestAnimationFrame(()=>fitName(inp));
+    inp.oninput=()=>{if(inp.value.includes("\n"))inp.value=inp.value.replace(/\n/g," ");answers[round][i]=inp.value;fitName(inp);renderRounds();renderAll();schedule("answers")};
+    inp.onpaste=e=>pasteColumn(e,round,i);
     inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();const n=$(`a-${round}-${i+1}`);if(n)n.focus();else if(round<ROUNDS){round++;renderAnswers();$(`a-${round}-0`).focus()}}};
     row.appendChild(inp);sheet.appendChild(row);
   }
+}
+function pasteColumn(e,r0,i0){
+  const txt=(e.clipboardData||window.clipboardData)?.getData("text")||"";
+  let lines=txt.replace(/\r/g,"").split("\n").map(l=>l.replace(/\t+/g," ").trim());
+  while(lines.length&&!lines[lines.length-1])lines.pop();
+  if(lines.length<2)return; // одна строка — обычная вставка
+  e.preventDefault();
+  let r=r0,i=i0,n=0;
+  for(const l of lines){if(r>ROUNDS)break;answers[r][i]=l;n++;i++;if(i>=Q){i=0;r++}}
+  renderAnswers();schedule("answers");
+  const h=$("pasteHint");h.textContent=`Вставлено ответов: ${n}`+(r>r0&&r0<ROUNDS?` (продолжение — в туре ${Math.min(r,ROUNDS)})`:"")+".";h.className="hint flash";
+  clearTimeout(h._t);h._t=setTimeout(()=>{h.textContent="Можно вставить сразу весь столбец ответов: встаньте в нужный вопрос и нажмите Ctrl+V.";h.className="hint"},5000);
+}
+function disarmClear(){const b=$("clearAll");b.classList.remove("armed");b.textContent="Очистить все ответы";$("clearCancel").hidden=true}
+function setupClearAll(){
+  const b=$("clearAll");let t=null;
+  b.onclick=()=>{
+    if(b.classList.contains("armed")){clearTimeout(t);answers=emptyAnswers();round=1;disarmClear();renderAnswers();schedule("answers");return}
+    b.classList.add("armed");b.textContent="Точно? Да, очистить всё";$("clearCancel").hidden=false;
+    clearTimeout(t);t=setTimeout(disarmClear,6000);
+  };
+  $("clearCancel").onclick=()=>{clearTimeout(t);disarmClear()};
 }
 function renderAll(){
   const t=$("allTable");let h="<tr><th>№</th>";
@@ -220,7 +254,7 @@ function renderAll(){
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function renderAnswers(){renderRounds();renderSheet();renderAll()}
 function refreshAnswerInputs(){ // after remote change: keep the field being typed in
-  for(let i=0;i<Q;i++){const el=$(`a-${round}-${i}`);if(el&&el!==document.activeElement)el.value=answers[round][i]}
+  for(let i=0;i<Q;i++){const el=$(`a-${round}-${i}`);if(el&&el!==document.activeElement){el.value=answers[round][i];fitName(el)}}
   renderRounds();renderAll();
 }
 
@@ -229,7 +263,7 @@ function fitName(el){ // высота поля под длину названи�
   if(!el.offsetParent)return;
   el.style.height="auto"; const h=el.scrollHeight; el.style.height=h>0?h+"px":"";
 }
-function fitAllNames(){document.querySelectorAll(".team .name").forEach(fitName)}
+function fitAllNames(){document.querySelectorAll(".team .name, .row .ans").forEach(fitName)}
 window.addEventListener("resize",fitAllNames);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitAllNames);
 function renderTeams(){
@@ -276,7 +310,7 @@ $("addForm").addEventListener("submit",e=>{
 
 /* ---------- modes ---------- */
 function setMode(m){mode=m;$("modeAnswers").setAttribute("aria-pressed",m==="answers");$("modeTeams").setAttribute("aria-pressed",m==="teams");
-  $("answersView").hidden=m!=="answers";$("teamsView").hidden=m!=="teams";if(m==="teams")requestAnimationFrame(fitAllNames);try{localStorage.setItem("ayu-quiz-mode",m)}catch(e){}}
+  $("answersView").hidden=m!=="answers";$("teamsView").hidden=m!=="teams";requestAnimationFrame(fitAllNames);try{localStorage.setItem("ayu-quiz-mode",m)}catch(e){}}
 $("modeAnswers").onclick=()=>setMode("answers");$("modeTeams").onclick=()=>setMode("teams");
 
 /* ---------- backup file ---------- */
@@ -297,6 +331,7 @@ $("importFile").onchange=async()=>{
 
 /* ---------- boot ---------- */
 loadLocal();
+setupClearAll();
 try{const m=localStorage.getItem("ayu-quiz-mode");if(m==="teams")setMode("teams")}catch(e){}
 renderAnswers();renderTeams();
 setStatus("saving","Подключение…");
