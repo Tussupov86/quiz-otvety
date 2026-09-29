@@ -62,7 +62,7 @@ h2{font-family:var(--display);font-weight:600;font-size:18px;margin:16px 0 10px}
 .team .idx{grid-area:idx}.team .name{grid-area:name}.team .stepper{grid-area:step}.team .del{grid-area:del}
 .team:first-child{border-top:0}
 .team .idx{color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;font-size:14px}
-.team .name{min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:500 17px var(--body);line-height:1.3;padding:8px 0;resize:none;overflow:hidden;display:block;overflow-wrap:anywhere}
+.team .name{min-width:0;width:100%;border:0;background:transparent;color:var(--ink);font:500 17px var(--body);line-height:1.3;padding:8px 0;min-height:calc(1.3em + 16px);resize:none;overflow:hidden;display:block;overflow-wrap:anywhere}
 .stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .stepper button{width:34px;height:36px;border:0;background:var(--bg);color:var(--ink);font-size:18px;cursor:pointer}
 .stepper input{width:40px;border:0;text-align:center;background:var(--surface);color:var(--ink);font:600 16px var(--body);font-variant-numeric:tabular-nums;-moz-appearance:textfield}
@@ -225,6 +225,13 @@ function refreshAnswerInputs(){ // after remote change: keep the field being typ
 }
 
 /* ---------- rendering: teams ---------- */
+function fitName(el){ // высота поля под длину названия; в скрытой вкладке не трогаем
+  if(!el.offsetParent)return;
+  el.style.height="auto"; const h=el.scrollHeight; el.style.height=h>0?h+"px":"";
+}
+function fitAllNames(){document.querySelectorAll(".team .name").forEach(fitName)}
+window.addEventListener("resize",fitAllNames);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitAllNames);
 function renderTeams(){
   $("teamCount").textContent=teams.length;
   $("peopleCount").textContent=teams.reduce((s,t)=>s+t.people,0);
@@ -234,7 +241,7 @@ function renderTeams(){
     const row=document.createElement("div");row.className="team";
     row.innerHTML=`<span class="idx">${k+1}</span>`;
     const name=document.createElement("textarea");name.className="name";name.rows=1;name.id="tn-"+t.id;name.value=t.name;name.placeholder="Название";
-    const fit=()=>{name.style.height="auto";name.style.height=name.scrollHeight+"px"};
+    const fit=()=>fitName(name);
     name.oninput=()=>{name.value=name.value.replace(/\n/g," ");t.name=name.value;fit();schedule("teams")};
     name.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();name.blur()}};
     requestAnimationFrame(fit);
@@ -269,7 +276,7 @@ $("addForm").addEventListener("submit",e=>{
 
 /* ---------- modes ---------- */
 function setMode(m){mode=m;$("modeAnswers").setAttribute("aria-pressed",m==="answers");$("modeTeams").setAttribute("aria-pressed",m==="teams");
-  $("answersView").hidden=m!=="answers";$("teamsView").hidden=m!=="teams";try{localStorage.setItem("ayu-quiz-mode",m)}catch(e){}}
+  $("answersView").hidden=m!=="answers";$("teamsView").hidden=m!=="teams";if(m==="teams")requestAnimationFrame(fitAllNames);try{localStorage.setItem("ayu-quiz-mode",m)}catch(e){}}
 $("modeAnswers").onclick=()=>setMode("answers");$("modeTeams").onclick=()=>setMode("teams");
 
 /* ---------- backup file ---------- */
